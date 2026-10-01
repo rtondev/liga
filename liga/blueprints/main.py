@@ -10,7 +10,9 @@ bp = Blueprint("main", __name__)
 
 @bp.route("/")
 def home():
-    return render_template("main/home.html")
+    user = current_user()
+    level = accounts.level_for(user["wins"]) if user else None
+    return render_template("main/home.html", level=level)
 
 
 @bp.route("/como-jogar")

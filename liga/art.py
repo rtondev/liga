@@ -24,13 +24,13 @@ def axolotl_svg(color: str = "rosa", mood: str = "feliz") -> str:
         mouth = "M76 116 Q100 132 124 116"
         eyes = _eyes(sad=False)
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Axolotl">
-  <g fill="none" stroke="{gill}" stroke-width="6" stroke-linecap="round">
-    <path d="M46 78 C28 62 26 40 40 34"/>
-    <path d="M52 70 C34 50 48 32 62 36"/>
-    <path d="M58 66 C52 44 70 30 78 42"/>
-    <path d="M154 78 C172 62 174 40 160 34"/>
-    <path d="M148 70 C166 50 152 32 138 36"/>
-    <path d="M142 66 C148 44 130 30 122 42"/>
+  <g fill="none" stroke="{gill}" stroke-width="7" stroke-linecap="round">
+    <path d="M72 96 C54 78 40 56 52 40"/>
+    <path d="M64 104 C40 90 30 66 46 48"/>
+    <path d="M58 112 C32 104 26 78 44 60"/>
+    <path d="M128 96 C146 78 160 56 148 40"/>
+    <path d="M136 104 C160 90 170 66 154 48"/>
+    <path d="M142 112 C168 104 174 78 156 60"/>
   </g>
   <ellipse cx="100" cy="118" rx="58" ry="46" fill="{body}"/>
   <ellipse cx="100" cy="132" rx="36" ry="22" fill="{body}"/>

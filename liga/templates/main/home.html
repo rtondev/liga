@@ -14,10 +14,10 @@
 <div class="pad stack">
   {% if current_user %}
     <article class="hello">
-      <span class="menu-ico">{{ icon('user') }}</span>
+      <img class="avatar hello-avatar" src="{{ url_for('profile.avatar_image', user_id=current_user.id) }}" alt="">
       <div class="hello-copy">
-        <strong>Olá, Clayton</strong>
-        <span>Nível 2 · 48 pontos · 5 vitórias</span>
+        <strong>Olá, {{ current_user.display_name }}</strong>
+        <span>Nível {{ level.level }} · {{ current_user.points }} pontos · {{ current_user.wins }} vitórias</span>
       </div>
       <form method="post" action="{{ url_for('auth.logout') }}">
         {{ csrf() }}

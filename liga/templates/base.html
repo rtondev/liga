@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/notyf.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=9">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=10">
 </head>
 <body data-theme="{{ theme }}">
   <div class="stage">
@@ -21,7 +21,7 @@
   </div>
   <script id="liga-flashes" type="application/json">{{ get_flashed_messages(with_categories=true) | tojson }}</script>
   <script src="{{ url_for('static', filename='vendor/notyf.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui.js') }}?v=9"></script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}?v=10"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

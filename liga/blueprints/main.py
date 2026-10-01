@@ -1,9 +1,14 @@
+from datetime import datetime, timedelta, timezone
+
 from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 
 from liga.art import axolotl_svg
 from liga.game.chemistry import RULES
 from liga.security import current_user, login_required
-from liga.services import accounts
+from liga.services import accounts, matches, suggestions
+
+_ZONE = timezone(timedelta(hours=-3))
+_DIFFICULTY = {"facil": "Fácil", "medio": "Médio", "dificil": "Difícil"}
 
 bp = Blueprint("main", __name__)
 
@@ -44,6 +49,75 @@ def ranking():
         position=position,
         pending=pending,
     )
+
+
+def _when(value: str) -> str:
+    try:
+        moment = datetime.fromisoformat(value).astimezone(_ZONE)
+    except (TypeError, ValueError):
+        return ""
+    return moment.strftime("%d/%m · %H:%M")
+
+
+def _match_cards(user_id: int):
+    cards = []
+    for match in matches.history(user_id):
+        slot = matches.slot_of(match, user_id)
+        names = matches.player_names(match)
+        opponent = names[2 if slot == 1 else 1]
+        status = match["status"]
+        if status == "waiting":
+            href = url_for("play.lobby", match_id=match["id"])
+            label, tone = "Aguardando", "wait"
+        elif status == "playing":
+            href = url_for("play.match", match_id=match["id"])
+            label, tone = "Em jogo", "play"
+        else:
+            href = url_for("play.result", match_id=match["id"])
+            winner = match["winner_slot"]
+            if winner == 0:
+                label, tone = "Empate", "draw"
+            elif winner == slot:
+                label, tone = "Vitória", "win"
+            else:
+                label, tone = "Derrota", "loss"
+        mode = "IA" if match["mode"] == "ai" else "Online"
+        level = _DIFFICULTY.get(match["difficulty"] or "", "")
+        detail = f"{mode} · {level}" if level else mode
+        points = match["p1_points"] if slot == 1 else match["p2_points"]
+        cards.append(
+            {
+                "href": href,
+                "label": label,
+                "tone": tone,
+                "opponent": opponent,
+                "detail": f"{detail} · {_when(match['finished_at'] or match['created_at'])}",
+                "points": points,
+            }
+        )
+    return cards
+
+
+@bp.route("/partidas")
+@login_required
+def played():
+    user = current_user()
+    return render_template("main/matches.html", cards=_match_cards(user["id"]))
+
+
+@bp.route("/sugestao", methods=["GET", "POST"])
+@login_required
+def suggest():
+    user = current_user()
+    if request.method == "POST":
+        error = suggestions.add(user["id"], request.form.get("texto", ""))
+        flash(error or "Sugestão enviada. Obrigado.", "error" if error else "info")
+        return redirect(url_for("main.suggest"))
+    rows = [
+        {"body": row["body"], "when": _when(row["created_at"])}
+        for row in suggestions.mine(user["id"])
+    ]
+    return render_template("main/suggest.html", rows=rows)
 
 
 @bp.route("/mascote/<mood>.svg")

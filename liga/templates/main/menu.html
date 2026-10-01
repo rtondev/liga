@@ -9,6 +9,8 @@
   {{ menuitem(url_for('study.review'), 'flask-conical', 'Revisão', 'Funções oxigenadas') }}
   {{ menuitem(url_for('main.tutorial'), 'circle-help', 'Como jogar', 'Regras da mesa') }}
   {{ menuitem(url_for('main.ranking'), 'trophy', 'Ranking', 'Geral e amigos') }}
+  {{ menuitem(url_for('main.played'), 'history', 'Partidas', 'Suas mesas') }}
+  {{ menuitem(url_for('main.suggest'), 'lightbulb', 'Sugestão', 'Conte o que melhorar') }}
   {% if current_user %}
     {{ menuitem(url_for('profile.view'), 'user', 'Perfil', '@' ~ current_user.username) }}
     {{ menuitem(url_for('profile.levels'), 'award', 'Níveis', 'Sua trilha de vitórias') }}

@@ -205,6 +205,29 @@ img { max-width: 100%; }
 .hero.teal, .btn.teal { background: var(--teal); }
 .hero.purple, .btn.purple, .btn { background: var(--purple); }
 .hero.slate { background: var(--slate); }
+.quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.quick a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--teal-d);
+  font-size: 13px;
+  font-weight: 600;
+}
+.quick a .icon { width: 18px; height: 18px; }
+.quick a:hover { border-color: var(--teal); color: var(--teal); }
+.row small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+.tag.wait { background: var(--lav); color: var(--ink-2); }
+.tag.play { background: #d7f6f4; color: var(--teal-d); }
 .btn.ghost {
   background: transparent;
   color: var(--teal);

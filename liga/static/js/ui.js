@@ -92,6 +92,11 @@ function fieldState(input, form) {
     if (!/^[A-Za-z0-9]{6}$/.test(trimmed)) return { state: "bad", text: "O código da sala tem 6 caracteres." };
     return { state: "ok", text: "Código no formato certo." };
   }
+  if (rule === "sugestao") {
+    if (trimmed.length < 8) return { state: "bad", text: "Escreva pelo menos 8 caracteres." };
+    if (trimmed.length > 400) return { state: "bad", text: "A sugestão cabe em 400 caracteres." };
+    return { state: "ok", text: `${trimmed.length}/400` };
+  }
   if (rule === "bio") {
     if (value.length > 140) return { state: "bad", text: "A bio cabe em 140 caracteres." };
     return { state: "ok", text: value.length ? `${value.length}/140` : "" };

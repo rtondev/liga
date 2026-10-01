@@ -114,6 +114,18 @@ def slot_of(match, user_id: int) -> int | None:
     return None
 
 
+def history(user_id: int):
+    return get_db().execute(
+        """
+        SELECT * FROM matches
+        WHERE player1_id = ? OR player2_id = ?
+        ORDER BY id DESC
+        LIMIT 40
+        """,
+        (user_id, user_id),
+    ).fetchall()
+
+
 def open_matches(user_id: int):
     return get_db().execute(
         """

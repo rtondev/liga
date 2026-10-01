@@ -8,12 +8,16 @@
   <div class="play-mid">
     <div class="boneyard"><span>CEMITÉRIO</span><b id="bone">0</b></div>
     <p class="turn-label" id="turn">Abrindo a mesa…</p>
+    <p class="chat-live" id="chat-live" hidden></p>
+    <div class="announce" id="announce" hidden></div>
     <div class="chain" id="chain"></div>
     <details class="log"><summary>Histórico</summary><div id="log"></div></details>
   </div>
   <div class="hand-sheet">
     <div class="hand-tab">SUA MÃO</div>
     <div class="toast" id="toast"></div>
+    <div class="reacts" id="phrases"></div>
+    <div class="reacts" id="emojis"></div>
     <div class="hand" id="hand"></div>
     <div class="hand-actions">
       <button class="btn mint" id="draw" type="button" disabled>{{ icon('plus') }} COMPRAR</button>
@@ -23,5 +27,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/game.js') }}"></script>
+<script src="{{ url_for('static', filename='js/game.js') }}?v=13"></script>
 {% endblock %}

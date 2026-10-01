@@ -682,7 +682,56 @@ body[data-theme="dark"] .scoreboard { background: #24383c; }
 }
 .boneyard b { display: block; margin-top: 28px; font-size: 14px; }
 .boneyard span { font-size: 8px; letter-spacing: .08em; font-weight: 700; }
-.turn-label { text-align: center; color: var(--teal); font-size: 12px; font-weight: 600; margin-top: 76px; }
+.turn-label { text-align: center; color: var(--teal); font-size: 15px; font-weight: 700; margin-top: 76px; }
+.turn-label.them { color: var(--purple-d); font-size: 20px; }
+.chat-live {
+  margin: 0 16px;
+  text-align: center;
+  color: var(--purple-d);
+  font-weight: 700;
+  font-size: 16px;
+}
+.announce {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 118px;
+  z-index: 6;
+  background: #243038;
+  color: #fff;
+  border-radius: 16px;
+  padding: 18px 16px;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.25;
+  box-shadow: 0 16px 40px rgba(16, 42, 48, .28);
+  animation: pop .35s ease;
+}
+@keyframes pop {
+  from { transform: translateY(10px) scale(.96); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.reacts {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 2px 6px;
+  scrollbar-width: none;
+}
+.reacts::-webkit-scrollbar { display: none; }
+.reacts button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.reacts button:hover { border-color: var(--teal); color: var(--teal); }
+.guest-name { margin: 0; color: var(--purple-d); font-weight: 700; }
 .chain {
   display: flex;
   align-items: center;
@@ -800,6 +849,14 @@ body[data-theme="dark"] .scoreboard { background: #24383c; }
   bottom: 8px;
   width: 1px;
   height: auto;
+}
+.domino.landed {
+  animation: land .8s ease;
+  box-shadow: 0 0 0 3px var(--purple);
+}
+@keyframes land {
+  0% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 .domino.playable { box-shadow: 0 0 0 2px var(--teal); }
 .domino.selected { box-shadow: 0 0 0 2px var(--purple); }

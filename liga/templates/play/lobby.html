@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import icon %}
+{% from "macros.html" import icon, csrf %}
 {% block phone_class %}table{% endblock %}
 {% block title %}Esperando · Liga!{% endblock %}
 {% block content %}
@@ -8,9 +8,25 @@
     <img class="spin" src="{{ url_for('main.mascot', mood='feliz', cor='teal') }}" alt="Axolotl girando no fundo do mar">
   </div>
   <p class="eyebrow teal">AGUARDANDO</p>
-  <p class="muted">Passe este código para a outra pessoa entrar.</p>
-  <p class="code-big">{{ match.room_code }}</p>
-  <button class="btn ghost" type="button" data-copy="{{ match.room_code }}">{{ icon('copy') }} COPIAR CÓDIGO</button>
+  {% if owner %}
+    <p class="muted" id="lobby-wait">
+      {% if guest %}
+        {{ guest }} entrou. A mesa só abre quando você der pronto.
+      {% else %}
+        Passe este código para a outra pessoa entrar.
+      {% endif %}
+    </p>
+    <p class="code-big">{{ match.room_code }}</p>
+    <p class="guest-name" id="lobby-guest" {% if not guest %}hidden{% endif %}>{{ guest or "" }}</p>
+    <button class="btn ghost" type="button" data-copy="{{ match.room_code }}">{{ icon('copy') }} COPIAR CÓDIGO</button>
+    <form id="lobby-start" method="post" action="{{ url_for('play.begin', match_id=match.id) }}" {% if not guest %}hidden{% endif %}>
+      {{ csrf() }}
+      <button class="btn" type="submit">PRONTO, COMEÇAR</button>
+    </form>
+  {% else %}
+    <p class="muted">{{ host }} criou a sala. A partida começa quando essa pessoa der pronto.</p>
+    <p class="code-big">{{ match.room_code }}</p>
+  {% endif %}
   <a class="text-link" href="{{ url_for('play.new') }}">Cancelar</a>
 </section>
 {% endblock %}

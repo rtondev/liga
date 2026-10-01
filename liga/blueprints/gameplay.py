@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from liga.security import current_user, verified_required
 from liga.services import accounts, matches
@@ -13,8 +13,6 @@ def new():
     if request.method == "POST" and request.form.get("codigo"):
         match_id, error = matches.join_room(user["id"], request.form.get("codigo", ""))
         if error:
-            from flask import flash
-
             flash(error, "error")
             return redirect(url_for("play.new"))
         match = matches.get_match(match_id)
@@ -49,7 +47,16 @@ def lobby(match_id):
         return redirect(url_for("play.new"))
     if match["status"] != "waiting":
         return redirect(url_for("play.match", match_id=match_id))
-    return render_template("play/lobby.html", match=match)
+    user = current_user()
+    guest = accounts.user_by_id(match["player2_id"]) if match["player2_id"] else None
+    host = accounts.user_by_id(match["player1_id"])
+    return render_template(
+        "play/lobby.html",
+        match=match,
+        owner=match["player1_id"] == user["id"],
+        guest=guest["display_name"] if guest else None,
+        host=host["display_name"] if host else "Jogador 1",
+    )
 
 
 @bp.route("/sala/<int:match_id>/estado")
@@ -60,7 +67,18 @@ def lobby_state(match_id):
     if match is None or matches.slot_of(match, user["id"]) is None:
         return jsonify({"ok": False}), 404
     if match["status"] == "waiting":
-        return jsonify({"ok": True, "status": "waiting", "code": match["room_code"]})
+        guest = accounts.user_by_id(match["player2_id"]) if match["player2_id"] else None
+        owner = match["player1_id"] == user["id"]
+        return jsonify(
+            {
+                "ok": True,
+                "status": "waiting",
+                "code": match["room_code"],
+                "guest": guest["display_name"] if guest else None,
+                "owner": owner,
+                "can_start": owner and bool(match["player2_id"]),
+            }
+        )
     return jsonify(
         {
             "ok": True,
@@ -68,6 +86,27 @@ def lobby_state(match_id):
             "url": url_for("play.match", match_id=match_id),
         }
     )
+
+
+@bp.route("/sala/<int:match_id>/comecar", methods=["POST"])
+@verified_required
+def begin(match_id):
+    started, error = matches.start_room(current_user()["id"], match_id)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("play.lobby", match_id=match_id))
+    return redirect(url_for("play.match", match_id=started))
+
+
+@bp.route("/partida/<int:match_id>/falar", methods=["POST"])
+@verified_required
+def speak(match_id):
+    body = request.get_json(silent=True) or {}
+    payload, error = matches.say(match_id, current_user()["id"], body.get("body"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 409
+    payload["result_url"] = url_for("play.result", match_id=match_id)
+    return jsonify(payload)
 
 
 @bp.route("/partida/<int:match_id>")

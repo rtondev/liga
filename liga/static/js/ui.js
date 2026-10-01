@@ -30,11 +30,20 @@ otp.forEach((input, index) => {
 
 const lobby = document.querySelector("[data-lobby]");
 if (lobby) {
+  const guest = document.querySelector("#lobby-guest");
+  const start = document.querySelector("#lobby-start");
+  const wait = document.querySelector("#lobby-wait");
   window.setInterval(async () => {
     try {
       const response = await fetch(lobby.dataset.lobby);
       const data = await response.json();
       if (data.url) window.location.href = data.url;
+      if (data.guest && guest && start && wait) {
+        guest.hidden = false;
+        guest.textContent = data.guest;
+        wait.textContent = `${data.guest} entrou. A mesa só abre quando você der pronto.`;
+        start.hidden = false;
+      }
     } catch (_error) {
       /* a próxima tentativa cobre a queda */
     }

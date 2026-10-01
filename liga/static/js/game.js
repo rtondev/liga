@@ -10,27 +10,47 @@ if (root) {
   const turn = document.querySelector("#turn");
   const log = document.querySelector("#log");
   const toast = document.querySelector("#toast");
+  const announce = document.querySelector("#announce");
+  const chatLive = document.querySelector("#chat-live");
+  const phrases = document.querySelector("#phrases");
+  const emojis = document.querySelector("#emojis");
   const drawButton = document.querySelector("#draw");
   const passButton = document.querySelector("#pass");
   let seen = null;
+  let seenChat = null;
   let selected = null;
   let busy = false;
   let snapshot = null;
+  let audioCtx = null;
+  let reactsReady = false;
 
   drawButton.addEventListener("click", () => send("draw"));
   passButton.addEventListener("click", () => send("pass"));
 
-  function beep() {
+  document.addEventListener("pointerdown", () => {
     if (!soundOn) return;
-    const audio = new AudioContext();
-    const osc = audio.createOscillator();
-    const gain = audio.createGain();
-    osc.frequency.value = 620;
-    gain.gain.value = 0.04;
-    osc.connect(gain);
-    gain.connect(audio.destination);
-    osc.start();
-    osc.stop(audio.currentTime + 0.08);
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }, { once: true });
+
+  function tone(notes, volume) {
+    if (!soundOn) return;
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    notes.forEach((freq, index) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const start = audioCtx.currentTime + index * 0.14;
+      osc.type = notes.length > 1 ? "triangle" : "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.34);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.36);
+    });
   }
 
   function showToast(text) {
@@ -62,7 +82,7 @@ if (root) {
         await pull();
         return;
       }
-      beep();
+      tone([620], 0.08);
       selected = null;
       paint(data);
     } catch (_error) {
@@ -93,6 +113,28 @@ if (root) {
     return node;
   }
 
+  async function react(body) {
+    try {
+      const response = await fetch(`/partida/${matchId}/falar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF": csrf,
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ body, csrf }),
+      });
+      const data = await response.json();
+      if (!data.ok) {
+        showToast(data.error || "Não deu para enviar.");
+        return;
+      }
+      paint(data);
+    } catch (_error) {
+      showToast("Sem conexão.");
+    }
+  }
+
   function piece(tile, flat) {
     const button = document.createElement("button");
     button.type = "button";
@@ -108,11 +150,22 @@ if (root) {
       window.location.href = data.result_url;
       return;
     }
+    const fresh = seen !== null && data.seq !== seen;
+    const theirs = fresh && data.last_actor !== data.you;
     if (seen === null) seen = data.seq;
-    else if (data.seq !== seen) {
-      showToast(data.message);
+    else if (fresh) {
+      if (theirs && data.message) {
+        announce.textContent = data.message;
+        announce.hidden = false;
+        window.clearTimeout(announce.timer);
+        announce.timer = window.setTimeout(() => {
+          announce.hidden = true;
+        }, 2800);
+        tone([523, 659, 784], 0.16);
+      }
       seen = data.seq;
     }
+    const landedId = fresh ? data.last_tile : null;
     bone.textContent = data.boneyard;
     const other = data.you === 1 ? "2" : "1";
     if (data.your_turn && !data.board.length && data.opening_id) {
@@ -122,6 +175,7 @@ if (root) {
     } else {
       turn.textContent = `Vez de ${data.names[other]}`;
     }
+    turn.classList.toggle("them", !data.your_turn);
     drawPlayers(data);
     chain.innerHTML = "";
     const legal = new Map(data.legal.map((item) => [item.tile_id, item.sides]));
@@ -135,7 +189,16 @@ if (root) {
       chain.append(empty);
     } else {
       if (chosen && chosen.includes("left")) chain.append(endButton("left"));
-      data.board.forEach((tile) => chain.append(piece(tile, true)));
+      data.board.forEach((tile) => {
+        const button = piece(tile, true);
+        if (tile.id === landedId) {
+          button.classList.add("landed");
+          window.requestAnimationFrame(() => {
+            button.scrollIntoView({ inline: "center", block: "nearest" });
+          });
+        }
+        chain.append(button);
+      });
       if (chosen && chosen.includes("right")) chain.append(endButton("right"));
     }
     hand.innerHTML = "";
@@ -150,12 +213,45 @@ if (root) {
     });
     drawButton.disabled = !data.can_draw;
     passButton.disabled = !data.can_pass;
+    drawReacts(data);
+    noteChat(data);
     log.innerHTML = "";
     data.log.forEach((line) => {
       const row = document.createElement("p");
       row.textContent = line;
       log.append(row);
     });
+  }
+
+  function drawReacts(data) {
+    if (reactsReady) return;
+    reactsReady = true;
+    (data.phrases || []).forEach((text) => phrases.append(reactButton(text, text)));
+    (data.emojis || []).forEach((text) => emojis.append(reactButton(text, text)));
+  }
+
+  function reactButton(label, body) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => react(body));
+    return button;
+  }
+
+  function noteChat(data) {
+    const items = data.chat || [];
+    const last = items[items.length - 1];
+    if (!last) return;
+    if (seenChat !== null && last.id !== seenChat && !last.you) {
+      chatLive.textContent = `${last.name}: ${last.body}`;
+      chatLive.hidden = false;
+      window.clearTimeout(noteChat.timer);
+      noteChat.timer = window.setTimeout(() => {
+        chatLive.hidden = true;
+      }, 2600);
+      tone([880], 0.07);
+    }
+    seenChat = last.id;
   }
 
   function drawPlayers(data) {

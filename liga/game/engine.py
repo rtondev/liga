@@ -110,7 +110,7 @@ def play(state: dict, player: int, tile_id: int, side: str) -> tuple[bool, str |
     state["opening_id"] = None
     state["scores"][slot] += tile["a"] + tile["b"]
     state["placed"][slot] += 1
-    _touch(state, player, verb, name)
+    _touch(state, player, verb, name, tile_id)
     if not state["hands"][slot]:
         _finish(state, player, "vazia")
     else:
@@ -222,9 +222,15 @@ def _best_double(hand: list[int], tiles: dict) -> int | None:
     return best
 
 
-def _touch(state: dict, actor: int, verb: str, name: str) -> None:
+def _touch(state: dict, actor: int, verb: str, name: str, tile_id: int | None = None) -> None:
     state["seq"] += 1
-    state["last"] = {"actor": actor, "verb": verb, "name": name, "seq": state["seq"]}
+    state["last"] = {
+        "actor": actor,
+        "verb": verb,
+        "name": name,
+        "seq": state["seq"],
+        "tile": tile_id,
+    }
     state["log"].append({"actor": actor, "verb": verb, "name": name})
     state["log"] = state["log"][-15:]
 

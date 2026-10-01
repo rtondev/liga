@@ -7,6 +7,8 @@ import secrets
 import threading
 from copy import deepcopy
 
+from datetime import datetime, timezone
+
 from liga.db import get_db, transaction, utc_now
 from liga.game.chemistry import FUNCTIONS
 from liga.game.engine import describe, draw, legal_moves, new_state, pass_turn, play, pips
@@ -14,6 +16,8 @@ from liga.game.engine import describe, draw, legal_moves, new_state, pass_turn, 
 _guard = threading.Lock()
 _locks: dict[int, threading.Lock] = {}
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+PHRASES = ("Boa!", "Quase!", "Sua vez", "Boa jogada", "Vamos!", "Ops", "De novo!", "Haha")
+EMOJIS = ("😄", "😮", "🔥", "👏", "🧪", "💪", "😎", "🤔")
 
 
 def _mutex(match_id: int) -> threading.Lock:
@@ -90,16 +94,38 @@ def join_room(user_id: int, code: str):
             return match["id"], None
         if match["status"] != "waiting":
             return None, "Essa partida já começou."
+        db.execute(
+            """
+            UPDATE matches
+            SET player2_id = ?
+            WHERE id = ? AND status = 'waiting' AND player2_id IS NULL
+            """,
+            (user_id, match["id"]),
+        )
+        return match["id"], None
+
+
+def start_room(user_id: int, match_id: int):
+    with transaction() as db:
+        match = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        if match is None or slot_of(match, user_id) is None:
+            return None, "Sala não encontrada."
+        if match["player1_id"] != user_id:
+            return None, "Só quem criou a sala começa a partida."
+        if match["status"] != "waiting":
+            return match["id"], None
+        if not match["player2_id"]:
+            return None, "Ainda falta a outra pessoa."
         state = new_state(match["hand_size"])
         db.execute(
             """
             UPDATE matches
-            SET player2_id = ?, status = 'playing', state_json = ?
+            SET status = 'playing', state_json = ?
             WHERE id = ? AND status = 'waiting'
             """,
-            (user_id, dump_state(state), match["id"]),
+            (dump_state(state), match_id),
         )
-        return match["id"], None
+        return match_id, None
 
 
 def get_match(match_id: int):
@@ -169,7 +195,43 @@ def view_for(match_id: int, user_id: int) -> tuple[dict | None, str | None]:
                 run_ai_turn(state, match["difficulty"] or "facil", 2)
                 _save(db, match_id, state)
             names = _names_in(db, match)
-            return _public(match, state, viewer, names), None
+            return _public(match, state, viewer, names, _recent_chat(db, match_id, viewer, names)), None
+
+
+def say(match_id: int, user_id: int, body: str):
+    text = (body or "").strip()
+    if text not in PHRASES and text not in EMOJIS:
+        return None, "Escolha uma frase ou um emoji."
+    with _mutex(match_id):
+        with transaction() as db:
+            match = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+            if match is None:
+                return None, "Partida não encontrada."
+            viewer = slot_of(match, user_id)
+            if viewer is None:
+                return None, "Essa mesa não é sua."
+            if match["status"] != "playing":
+                return None, "O chat abre quando a partida começa."
+            last = db.execute(
+                """
+                SELECT created_at FROM chats
+                WHERE match_id = ? AND player_slot = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (match_id, viewer),
+            ).fetchone()
+            if last and _too_soon(last["created_at"]):
+                return None, "Espere um instante."
+            db.execute(
+                """
+                INSERT INTO chats (match_id, player_slot, body, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (match_id, viewer, text, utc_now()),
+            )
+            state = load_state(match["state_json"])
+            names = _names_in(db, match)
+            return _public(match, state, viewer, names, _recent_chat(db, match_id, viewer, names)), None
 
 
 def action(match_id: int, user_id: int, kind: str, tile_id=None, side=None):
@@ -208,7 +270,42 @@ def action(match_id: int, user_id: int, kind: str, tile_id=None, side=None):
                 run_ai_turn(state, match["difficulty"] or "facil", 2)
             _save(db, match_id, state)
             names = _names_in(db, match)
-            return _public(match, state, viewer, names), None
+            return _public(match, state, viewer, names, _recent_chat(db, match_id, viewer, names)), None
+
+
+def _too_soon(stamp: str) -> bool:
+    try:
+        previous = datetime.fromisoformat(stamp)
+    except ValueError:
+        return False
+    if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - previous).total_seconds() < 0.8
+
+
+def _recent_chat(db, match_id: int, viewer: int, names: dict[int, str]):
+    rows = db.execute(
+        """
+        SELECT id, player_slot, body FROM chats
+        WHERE match_id = ?
+        ORDER BY id DESC
+        LIMIT 20
+        """,
+        (match_id,),
+    ).fetchall()
+    items = []
+    for row in reversed(rows):
+        slot = row["player_slot"]
+        items.append(
+            {
+                "id": row["id"],
+                "slot": slot,
+                "body": row["body"],
+                "name": names.get(slot, ""),
+                "you": slot == viewer,
+            }
+        )
+    return items
 
 
 def _save(db, match_id: int, state: dict) -> None:
@@ -298,7 +395,7 @@ def _face(state: dict, tile_id: int, left: int | None = None, right: int | None 
     }
 
 
-def _public(match, state: dict, viewer: int, names: dict[int, str]) -> dict:
+def _public(match, state: dict, viewer: int, names: dict[int, str], chat=None) -> dict:
     your_moves = legal_moves(state, viewer) if state["status"] == "playing" else []
     log = []
     for item in state["log"]:
@@ -323,7 +420,12 @@ def _public(match, state: dict, viewer: int, names: dict[int, str]) -> dict:
         "opening_id": state["opening_id"] if not state["board"] else None,
         "names": {"1": names[1], "2": names[2]},
         "seq": state["seq"],
+        "last_actor": state["last"]["actor"] if state["last"] else None,
+        "last_tile": state["last"].get("tile") if state["last"] else None,
         "message": describe(state["last"], viewer, names),
+        "chat": chat or [],
+        "phrases": list(PHRASES),
+        "emojis": list(EMOJIS),
         "log": [line for line in log if line],
         "end": state["end"],
         "can_draw": state["status"] == "playing"

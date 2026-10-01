@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, csrf %}
+{% block title %}Liga!{% endblock %}
+{% block content %}
+<section class="brand">
+  <a class="gear" href="{{ url_for('settings.index') }}" aria-label="Configurações">
+    {{ icon('settings') }}
+  </a>
+  <img class="logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Átomo do Liga!">
+  <h1 class="word">Liga!</h1>
+  <p class="tagline">Conecte e Aprenda.</p>
+</section>
+<hr class="rule-line">
+<div class="pad stack">
+  {% if current_user %}
+    <article class="hello">
+      <span class="menu-ico">{{ icon('user') }}</span>
+      <div class="hello-copy">
+        <strong>Olá, Clayton</strong>
+        <span>Nível 2 · 48 pontos · 5 vitórias</span>
+      </div>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        {{ csrf() }}
+        <button class="hello-out" type="submit">{{ icon('log-out') }} Sair</button>
+      </form>
+    </article>
+    <a class="hero teal" href="{{ url_for('play.new') }}">{{ icon('play') }} JOGAR</a>
+  {% else %}
+    <a class="hero teal" href="{{ url_for('auth.login') }}">{{ icon('play') }} JOGAR</a>
+  {% endif %}
+  <a class="hero purple" href="{{ url_for('main.tutorial') }}">{{ icon('circle-help') }} COMO JOGAR</a>
+  <a class="hero slate" href="{{ url_for('main.ranking') }}">{{ icon('trophy') }} RANKING</a>
+  {% if not current_user %}
+    <a class="btn ghost" href="{{ url_for('auth.register') }}">CRIAR CONTA</a>
+  {% endif %}
+</div>
+{% endblock %}

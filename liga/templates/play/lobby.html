@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon %}
+{% block phone_class %}table{% endblock %}
+{% block title %}Esperando · Liga!{% endblock %}
+{% block content %}
+<section class="pad center lobby" data-lobby="{{ url_for('play.lobby_state', match_id=match.id) }}">
+  <div class="mascot-block">
+    <img class="spin" src="{{ url_for('main.mascot', mood='feliz', cor='teal') }}" alt="Axolotl girando no fundo do mar">
+  </div>
+  <p class="eyebrow teal">AGUARDANDO</p>
+  <p class="muted">Passe este código para a outra pessoa entrar.</p>
+  <p class="code-big">{{ match.room_code }}</p>
+  <button class="btn ghost" type="button" data-copy="{{ match.room_code }}">{{ icon('copy') }} COPIAR CÓDIGO</button>
+  <a class="text-link" href="{{ url_for('play.new') }}">Cancelar</a>
+</section>
+{% endblock %}

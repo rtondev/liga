@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Fim de jogo · Liga!{% endblock %}
+{% block content %}
+<section class="pad center lobby">
+  <h1 class="word">FIM DE JOGO!</h1>
+  <div class="mascot-block">
+    <img src="{{ url_for('main.mascot', mood=mood, cor='rosa' if mood == 'feliz' else 'lilas') }}" alt="Axolotl {{ mood }}">
+  </div>
+  <p><strong>{{ blurb }}</strong></p>
+  <div class="scoreboard">
+    <p style="margin:0 0 4px">
+      {% if winner == 0 %}
+        <strong>Empate</strong>
+      {% elif winner == viewer %}
+        <strong>{{ names[viewer] }}</strong> ganhou!
+      {% else %}
+        <strong>{{ names[winner] }}</strong> ganhou!
+      {% endif %}
+    </p>
+    <p class="tiny" style="color:var(--purple);margin-top:0">PONTUAÇÃO FINAL</p>
+    <div class="versus">
+      <div class="pill-score purple {% if winner == 1 %}you-win{% endif %}">
+        <small>{{ names[1] }}</small>
+        <b>{{ match.p1_points }}</b>
+        <small>mão {{ match.p1_pips }}</small>
+      </div>
+      <span class="muted">X</span>
+      <div class="pill-score teal {% if winner == 2 %}you-win{% endif %}">
+        <small>{{ names[2] }}</small>
+        <b>{{ match.p2_points }}</b>
+        <small>mão {{ match.p2_pips }}</small>
+      </div>
+    </div>
+    <p class="tiny muted">O número grande é o que você ligou. A mão é o que sobrou. Vence quem esvazia a mão; se travar, vence a mão mais leve.</p>
+  </div>
+  <form method="post" action="{{ url_for('play.new') }}" class="stack">
+    {{ csrf() }}
+    <input type="hidden" name="mode" value="{{ match.mode }}">
+    <input type="hidden" name="difficulty" value="{{ match.difficulty or 'facil' }}">
+    <input type="hidden" name="hand_size" value="{{ match.hand_size }}">
+    <button class="btn teal" type="submit">
+      JOGAR NOVAMENTE
+    </button>
+  </form>
+  <a class="btn ghost" href="{{ url_for('main.home') }}">MENU</a>
+</section>
+{% endblock %}

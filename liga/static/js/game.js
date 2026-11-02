@@ -202,6 +202,7 @@ if (root) {
     }
     turn.classList.toggle("them", !data.your_turn);
     drawPlayers(data);
+    const keepScroll = chain.dataset.ready ? chain.scrollLeft : null;
     chain.innerHTML = "";
     const legal = new Map(data.legal.map((item) => [item.tile_id, item.sides]));
     const chosen = selected != null ? (data.hints ? legal.get(selected) : ["left", "right"]) : null;
@@ -225,7 +226,16 @@ if (root) {
         chain.append(button);
       });
       if (chosen && chosen.includes("right")) chain.append(endButton("right"));
-      if (landedNode) window.requestAnimationFrame(() => landedNode.scrollIntoView({ block: "nearest", inline: "nearest" }));
+      window.requestAnimationFrame(() => {
+        if (landedNode) {
+          chain.scrollLeft = landedNode.offsetLeft - (chain.clientWidth - landedNode.offsetWidth) / 2;
+        } else if (keepScroll == null) {
+          chain.scrollLeft = chain.scrollWidth;
+        } else {
+          chain.scrollLeft = keepScroll;
+        }
+        chain.dataset.ready = "1";
+      });
     }
     hand.innerHTML = "";
     data.your_hand.forEach((tile) => {

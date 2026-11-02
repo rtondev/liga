@@ -7,7 +7,15 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from liga.blueprints import register
 from liga.config import Config
 from liga.db import init_db
-from liga.security import csrf_ok, current_user, ensure_csrf, reject_csrf
+from liga.security import csrf_ok, current_user, ensure_csrf, rate_limited, reject_csrf
+
+AUTH_ENDPOINTS = {"auth.login", "auth.register", "auth.confirm", "auth.forgot", "auth.reset", "settings.email", "settings.password"}
+
+CSP = (
+    "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "script-src 'self'; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com; "
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+)
 
 
 def create_app() -> Flask:
@@ -33,8 +41,26 @@ def create_app() -> Flask:
     @app.before_request
     def protect():
         ensure_csrf()
-        if request.method == "POST" and not csrf_ok():
-            return reject_csrf()
+        if request.method == "POST":
+            if app.config["RATE_LIMIT"]:
+                bucket = "auth" if request.endpoint in AUTH_ENDPOINTS else "post"
+                if rate_limited(bucket):
+                    return "Muitas tentativas. Espere um minuto.", 429
+            if not csrf_ok():
+                return reject_csrf()
+
+    @app.after_request
+    def headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault("Content-Security-Policy", CSP)
+        if app.config["PRODUCTION"]:
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        if request.endpoint != "static":
+            response.headers.setdefault("Cache-Control", "no-store")
+        return response
 
     @app.errorhandler(404)
     def missing(_error):

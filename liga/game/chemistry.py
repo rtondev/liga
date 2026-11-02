@@ -71,8 +71,11 @@ FUNCTIONS = {
 }
 
 RULES = [
-    "O objetivo é ficar sem peças antes do oponente. Cada ponta do dominó é uma função oxigenada.",
-    "Só encaixa função igual: álcool com álcool, cetona com cetona. A mesa tem duas pontas abertas.",
-    "Sem encaixe, compre uma peça no cemitério. Se ele acabar e ainda não der para jogar, passe a vez.",
-    "Se a mesa travar, vence quem ficou com a mão mais leve. Empate quando as duas mãos pesam igual.",
+    "São 56 peças (o dobro do dominó comum). Cada metade mostra o NOME ou a FUNÇÃO (fórmula) de uma função oxigenada.",
+    "Escolha o modo (IA ou Dupla) e a dificuldade (Fácil, Médio ou Difícil). Cada jogador começa com 7 peças; o resto vai para o cemitério.",
+    "Começa quem tem uma carroça (NOME e FUNÇÃO da mesma função). Se ninguém tiver, o sistema sorteia quem começa.",
+    "Ligue nome com a sua fórmula: na ponta \"Álcool\" vai \"R–OH\", e vice-versa. Dicas só no modo Fácil.",
+    "Sem peça que ligue, puxe do cemitério. Você pode puxar até achar ou passar a vez, mas só depois de puxar pelo menos uma.",
+    "Vence quem ficar sem peças. Se a mesa travar, vence quem tiver menos peças; com a mesma quantidade, empate.",
+    "Cada acerto vale 5 pontos. O vencedor soma os seus pontos e metade dos pontos do adversário; o perdedor fica com os seus.",
 ]

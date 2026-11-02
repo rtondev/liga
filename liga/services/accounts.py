@@ -209,7 +209,14 @@ def latest_code(user_id, purpose):
 
 def consume_code(user_id, purpose, code):
     row = latest_code(user_id, purpose)
-    if row is None or row["code"] != (code or "").strip():
+    if row is None:
+        return None, "Código incorreto."
+    if row["code"] != (code or "").strip():
+        with transaction() as db:
+            db.execute(
+                "UPDATE email_codes SET tries = tries + 1, used = CASE WHEN tries + 1 >= 5 THEN 1 ELSE used END WHERE id = ?",
+                (row["id"],),
+            )
         return None, "Código incorreto."
     if row["expires_at"] < utc_now():
         return None, "Código expirado. Peça outro."

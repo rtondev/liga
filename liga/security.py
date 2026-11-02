@@ -1,4 +1,8 @@
+import hmac
 import secrets
+import threading
+import time
+from collections import defaultdict, deque
 from functools import wraps
 from urllib.parse import urlparse
 
@@ -66,7 +70,8 @@ def csrf_ok() -> bool:
     if not sent and request.is_json:
         payload = request.get_json(silent=True) or {}
         sent = payload.get("csrf")
-    return bool(sent) and sent == session.get("csrf")
+    token = session.get("csrf")
+    return bool(sent) and bool(token) and isinstance(sent, str) and hmac.compare_digest(sent, token)
 
 
 def reject_csrf():
@@ -83,3 +88,34 @@ def guard_post():
     if request.method == "POST" and not csrf_ok():
         return reject_csrf()
     return None
+
+
+# Limite simples por IP em memória (um processo gunicorn). Protege login, cadastro,
+# códigos de 4 dígitos e as jogadas contra força bruta e abuso.
+_hits: dict[str, deque] = defaultdict(deque)
+_hits_lock = threading.Lock()
+LIMITS = {
+    "auth": (10, 60),
+    "post": (120, 60),
+}
+
+
+def rate_limited(bucket: str) -> bool:
+    limit, window = LIMITS[bucket]
+    key = f"{bucket}:{request.remote_addr}"
+    now = time.monotonic()
+    with _hits_lock:
+        queue = _hits[key]
+        while queue and now - queue[0] > window:
+            queue.popleft()
+        if len(queue) >= limit:
+            return True
+        queue.append(now)
+        if len(_hits) > 50000:
+            _hits.clear()
+    return False
+
+
+def reset_rate_limits() -> None:
+    with _hits_lock:
+        _hits.clear()

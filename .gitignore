@@ -3,3 +3,9 @@ __pycache__/
 instance/
 .venv/
 venv/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+secret_key
+.pytest_cache/

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from liga.game.engine import legal_moves, orient_left, orient_right
+from liga.game.engine import can_pass, draw, is_carroca, legal_moves, mate, pass_turn, play
 
 
 def choose_action(state: dict, player: int, difficulty: str) -> tuple[str, dict | None]:
@@ -17,10 +17,8 @@ def choose_action(state: dict, player: int, difficulty: str) -> tuple[str, dict 
 
 
 def run_ai_turn(state: dict, difficulty: str, slot: int = 2) -> dict:
-    from liga.game.engine import draw, pass_turn, play
-
     guard = 0
-    while state["status"] == "playing" and state["turn"] == slot and guard < 40:
+    while state["status"] == "playing" and state["turn"] == slot and guard < 80:
         guard += 1
         kind, payload = choose_action(state, slot, difficulty)
         if kind == "play":
@@ -28,6 +26,8 @@ def run_ai_turn(state: dict, difficulty: str, slot: int = 2) -> dict:
         elif kind == "draw":
             ok, _error = draw(state, slot)
         else:
+            ok, _error = pass_turn(state, slot)
+        if not ok and can_pass(state, slot):
             ok, _error = pass_turn(state, slot)
         if not ok:
             break
@@ -40,37 +40,29 @@ def _pick(state: dict, player: int, moves: list[dict], difficulty: str) -> dict:
         tile_id, side = random.choice(options)
         return {"tile_id": tile_id, "side": side}
 
-    def rank(option: tuple[int, str]) -> tuple[int, int]:
+    def rank(option):
         tile_id, side = option
-        tile = state["tiles"][tile_id]
-        pips = tile["a"] + tile["b"]
+        follow = _followers(state, player, tile_id, side)
         weight = 1 if difficulty == "medio" else 5
-        follow = _followers(state, player, tile_id, side) * weight
-        double = 3 if tile["a"] == tile["b"] else 0
-        return pips + follow + double, pips
+        keep = 2 if is_carroca(state["tiles"][tile_id]) else 0
+        return follow * weight - keep, random.random() if difficulty == "medio" else 0
 
     tile_id, side = max(options, key=rank)
     return {"tile_id": tile_id, "side": side}
 
 
 def _followers(state: dict, player: int, tile_id: int, side: str) -> int:
-    exposed = _exposed_after(state, tile_id, side)
+    tile = state["tiles"][tile_id]
+    if side == "center":
+        exposed = {tile["a"], tile["b"]}
+    else:
+        end = state["board"][0]["left"] if side == "left" else state["board"][-1]["right"]
+        exposed = {tile["b"] if tile["a"] == mate(end) else tile["a"]}
     total = 0
     for other_id in state["hands"][str(player)]:
         if other_id == tile_id:
             continue
         other = state["tiles"][other_id]
-        if other["a"] in exposed or other["b"] in exposed:
+        if mate(other["a"]) in exposed or mate(other["b"]) in exposed:
             total += 1
     return total
-
-
-def _exposed_after(state: dict, tile_id: int, side: str) -> set[int]:
-    tile = state["tiles"][tile_id]
-    if side == "center" or not state["board"]:
-        return {tile["a"], tile["b"]}
-    if side == "left":
-        left, _right = orient_left(tile, state["board"][0]["left"])
-        return {left}
-    _left, right = orient_right(tile, state["board"][-1]["right"])
-    return {right}

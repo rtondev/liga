@@ -36,10 +36,10 @@ def email():
                 flash(error, "error")
                 return redirect(url_for("settings.email"))
             else:
-                accounts.issue_code(user["id"], "verify")
-                session["code_purpose"] = "verify"
-                flash("Confirme o novo e-mail.", "info")
-                return redirect(url_for("auth.confirm"))
+                from liga.blueprints.auth import start_code
+
+                flash("E-mail atualizado.", "info")
+                return start_code(user["id"], "verify")
     return render_template("settings/email.html")
 
 

@@ -10,8 +10,8 @@
     <input type="radio" name="mode" value="online">
     <span class="ico">{{ icon('wifi') }}</span>
     <span>
-      <strong>ONLINE</strong>
-      <p>Jogue com outra pessoa ao mesmo tempo</p>
+      <strong>DUPLA</strong>
+      <p>Jogue com outra pessoa (sala com código)</p>
     </span>
     <span class="dot"></span>
   </label>
@@ -35,16 +35,7 @@
       {% endfor %}
     </div>
   </div>
-  <p class="lbl">Começar com</p>
-  <div class="choices">
-    {% for n in (6, 7, 8) %}
-      <label class="chip pill">
-        <input type="radio" name="hand_size" value="{{ n }}" {% if n == 6 %}checked{% endif %}>
-        {{ n }}
-      </label>
-    {% endfor %}
-  </div>
-  <p class="tiny center muted">peças por jogador</p>
+  <p class="tiny center muted">Cada jogador começa com 7 peças. Dicas só no modo Fácil.</p>
   <button class="btn" type="submit">{{ icon('play') }} JOGAR</button>
 </form>
 <form class="pad stack tight" method="post" data-verify>

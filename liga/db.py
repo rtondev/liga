@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS email_codes (
     code TEXT NOT NULL,
     payload TEXT,
     expires_at TEXT NOT NULL,
-    used INTEGER NOT NULL DEFAULT 0
+    used INTEGER NOT NULL DEFAULT 0,
+    tries INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS friendships (
@@ -134,5 +135,8 @@ def init_db(app) -> None:
     with app.app_context():
         connection = get_db()
         connection.executescript(SCHEMA)
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(email_codes)")}
+        if "tries" not in columns:
+            connection.execute("ALTER TABLE email_codes ADD COLUMN tries INTEGER NOT NULL DEFAULT 0")
         connection.commit()
         app.teardown_appcontext(close_db)

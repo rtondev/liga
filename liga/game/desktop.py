@@ -11,7 +11,7 @@ import pygame
 
 from liga.game.ai import run_ai_turn
 from liga.game.chemistry import FUNCTIONS
-from liga.game.engine import draw, legal_moves, new_state, pass_turn, play
+from liga.game.engine import draw, label as face_label, legal_moves, new_state, pass_turn, play
 
 WIDTH, HEIGHT = 1100, 720
 BG = (236, 243, 244)
@@ -246,7 +246,7 @@ def _tile(screen, font, rect, left, right, horizontal: bool) -> None:
             pygame.Rect(rect.left, rect.centery, rect.w, rect.h // 2),
         )
     for area, value in zip(areas, (left, right)):
-        label = font.render(FUNCTIONS[value]["tile"], True, (36, 48, 56))
+        label = font.render(face_label(value), True, (36, 48, 56))
         screen.blit(label, label.get_rect(center=area.center))
 
 
@@ -257,7 +257,7 @@ def _line(state) -> str:
     name = last.get("name") or ""
     if last["verb"] == "play":
         who = "Você" if last["actor"] == 1 else "A IA"
-        return f"{who} ligou {name} com {name}."
+        return f"{who} ligou na ponta {name}."
     if last["verb"] == "open":
         who = "Você" if last["actor"] == 1 else "A IA"
         return f"{who} abriu a mesa com {name}."

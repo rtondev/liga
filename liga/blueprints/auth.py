@@ -1,9 +1,32 @@
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+
+from liga import mail
 
 from liga.security import current_user, login_required, login_user, logout_user
 from liga.services import accounts
 
 bp = Blueprint("auth", __name__)
+
+
+def start_code(user_id: int, purpose: str, payload=None):
+    """Gera e entrega o código. Sem SMTP em produção, a confirmação de e-mail é
+    dispensada e a recuperação de senha fica desligada (nunca mostrar código na tela)."""
+    row = accounts.user_by_id(user_id)
+    if mail.enabled():
+        code = accounts.issue_code(user_id, purpose, payload)
+        mail.send_code(row["email"], code, purpose)
+        session["code_purpose"] = purpose
+        return redirect(url_for("auth.confirm"))
+    if current_app.config["SHOW_CODES"]:
+        accounts.issue_code(user_id, purpose, payload)
+        session["code_purpose"] = purpose
+        return redirect(url_for("auth.confirm"))
+    if purpose == "verify":
+        accounts.mark_verified(user_id)
+        return redirect(url_for("main.home"))
+    session.pop("pending_user_id", None)
+    flash("A recuperação de senha por e-mail ainda não está disponível.", "info")
+    return redirect(url_for("auth.login"))
 
 
 def _purpose() -> str:
@@ -28,9 +51,9 @@ def login():
         else:
             login_user(row["id"], remember=bool(request.form.get("lembrar")))
             if not row["email_verified"]:
-                session["code_purpose"] = "verify"
                 if accounts.latest_code(row["id"], "verify") is None:
-                    accounts.issue_code(row["id"], "verify")
+                    return start_code(row["id"], "verify")
+                session["code_purpose"] = "verify"
                 return redirect(url_for("auth.confirm"))
             return redirect(url_for("main.home"))
     return render_template("auth/login.html")
@@ -71,9 +94,7 @@ def register():
             flash(error, "error")
             return redirect(url_for("auth.register"))
         login_user(user_id, remember=bool(request.form.get("lembrar")))
-        session["code_purpose"] = "verify"
-        accounts.issue_code(user_id, "verify")
-        return redirect(url_for("auth.confirm"))
+        return start_code(user_id, "verify")
     form = session.pop("register_form", None) or {"nome": "", "username": "", "email": ""}
     return render_template("auth/register.html", form=form)
 
@@ -89,13 +110,10 @@ def forgot():
     if request.method == "POST":
         row = accounts.user_by_login(request.form.get("email", ""))
         if row is None:
-            flash("Não encontrei esse e-mail.", "error")
-            return redirect(url_for("auth.forgot"))
-        else:
-            accounts.issue_code(row["id"], "reset")
-            session["pending_user_id"] = row["id"]
-            session["code_purpose"] = "reset"
-            return redirect(url_for("auth.confirm"))
+            flash("Se esse e-mail existir, enviamos um código.", "info")
+            return redirect(url_for("auth.login"))
+        session["pending_user_id"] = row["id"]
+        return start_code(row["id"], "reset")
     return render_template("auth/forgot.html")
 
 
@@ -107,9 +125,8 @@ def confirm():
         return redirect(url_for("auth.login"))
     active = accounts.latest_code(user_id, purpose)
     if request.method == "POST" and request.form.get("reenviar"):
-        accounts.issue_code(user_id, purpose, active["payload"] if active else None)
         flash("Novo código gerado.", "info")
-        return redirect(url_for("auth.confirm"))
+        return start_code(user_id, purpose, active["payload"] if active else None)
     if request.method == "POST":
         digits = "".join(request.form.get(f"d{i}", "") for i in range(4))
         row, error = accounts.consume_code(user_id, purpose, digits)
@@ -127,7 +144,7 @@ def confirm():
     active = accounts.latest_code(user_id, purpose)
     return render_template(
         "auth/confirm.html",
-        code=active["code"] if active else "",
+        code=active["code"] if active and current_app.config["SHOW_CODES"] else "",
         purpose=purpose,
     )
 

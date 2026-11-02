@@ -23,22 +23,21 @@
       <div class="pill-score purple {% if winner == 1 %}you-win{% endif %}">
         <small>{{ names[1] }}</small>
         <b>{{ match.p1_points }}</b>
-        <small>mão {{ match.p1_pips }}</small>
+        <small>{{ match.p1_pips }} peças na mão</small>
       </div>
       <span class="muted">X</span>
       <div class="pill-score teal {% if winner == 2 %}you-win{% endif %}">
         <small>{{ names[2] }}</small>
         <b>{{ match.p2_points }}</b>
-        <small>mão {{ match.p2_pips }}</small>
+        <small>{{ match.p2_pips }} peças na mão</small>
       </div>
     </div>
-    <p class="tiny muted">O número grande é o que você ligou. A mão é o que sobrou. Vence quem esvazia a mão; se travar, vence a mão mais leve.</p>
+    <p class="tiny muted">Cada acerto vale 5 pontos. Quem vence soma os seus pontos e metade dos do adversário. Se a mesa travar, vence quem tiver menos peças.</p>
   </div>
   <form method="post" action="{{ url_for('play.new') }}" class="stack">
     {{ csrf() }}
     <input type="hidden" name="mode" value="{{ match.mode }}">
     <input type="hidden" name="difficulty" value="{{ match.difficulty or 'facil' }}">
-    <input type="hidden" name="hand_size" value="{{ match.hand_size }}">
     <button class="btn teal" type="submit">
       JOGAR NOVAMENTE
     </button>

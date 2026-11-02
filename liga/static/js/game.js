@@ -100,16 +100,19 @@ if (root) {
     if (data.ok) paint(data);
   }
 
-  function half(value, name, struct) {
+  function half(part) {
     const node = document.createElement("div");
-    node.className = `half fn-${value}`;
-    const formula = document.createElement("pre");
-    formula.className = "struct";
-    formula.textContent = struct;
-    const label = document.createElement("span");
-    label.className = "fname";
-    label.textContent = name;
-    node.append(formula, label);
+    node.className = `half ${part.kind}${part.fn != null ? ` fn-${part.fn}` : ""}`;
+    const main = document.createElement(part.kind === "funcao" ? "pre" : "span");
+    main.className = part.kind === "funcao" ? "struct" : "fname";
+    main.textContent = part.text;
+    node.append(main);
+    if (part.hint) {
+      const tip = document.createElement("small");
+      tip.className = "hint";
+      tip.textContent = part.hint;
+      node.append(tip);
+    }
     return node;
   }
 
@@ -139,8 +142,8 @@ if (root) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = flat ? "domino flat" : "domino";
-    button.title = `${tile.a_full} / ${tile.b_full}`;
-    button.append(half(tile.a, tile.a_name, tile.a_struct), half(tile.b, tile.b_name, tile.b_struct));
+    if (tile.a.mate) button.title = `Liga com ${tile.a.mate} ou ${tile.b.mate}`;
+    button.append(half(tile.a), half(tile.b));
     return button;
   }
 
@@ -168,8 +171,8 @@ if (root) {
     const landedId = fresh ? data.last_tile : null;
     bone.textContent = data.boneyard;
     const other = data.you === 1 ? "2" : "1";
-    if (data.your_turn && !data.board.length && data.opening_id) {
-      turn.textContent = "Abra com a dupla mais alta.";
+    if (data.your_turn && data.must_carroca) {
+      turn.textContent = "Abra com uma carroça (nome e função da mesma família).";
     } else if (data.your_turn) {
       turn.textContent = data.board.length ? "Sua vez de ligar" : "Sua vez de abrir a mesa";
     } else {
@@ -179,7 +182,7 @@ if (root) {
     drawPlayers(data);
     chain.innerHTML = "";
     const legal = new Map(data.legal.map((item) => [item.tile_id, item.sides]));
-    const chosen = selected != null ? legal.get(selected) : null;
+    const chosen = selected != null ? (data.hints ? legal.get(selected) : ["left", "right"]) : null;
     if (!data.board.length) {
       const empty = document.createElement("p");
       empty.className = "empty-board";
@@ -187,6 +190,7 @@ if (root) {
         ? "A mesa está vazia. A primeira peça abre as duas funções."
         : "A outra ponta abre a mesa.";
       chain.append(empty);
+      if (selected != null) chain.append(endButton("center"));
     } else {
       if (chosen && chosen.includes("left")) chain.append(endButton("left"));
       data.board.forEach((tile) => {
@@ -204,11 +208,15 @@ if (root) {
     hand.innerHTML = "";
     data.your_hand.forEach((tile) => {
       const button = piece(tile, false);
-      const sides = legal.get(tile.id);
-      if (!data.your_turn || !sides) button.classList.add("dim");
-      else button.classList.add("playable");
+      const sides = data.hints ? legal.get(tile.id) : null;
+      if (!data.your_turn || (data.hints && !sides)) button.classList.add("dim");
+      else if (data.hints) button.classList.add("playable");
       if (tile.id === selected) button.classList.add("selected");
-      button.addEventListener("click", () => choose(tile.id, sides));
+      button.draggable = data.your_turn;
+      button.addEventListener("dragstart", (event) => {
+        event.dataTransfer.setData("text/plain", String(tile.id));
+      });
+      button.addEventListener("click", () => choose(tile.id, sides, data));
       hand.append(button);
     });
     drawButton.disabled = !data.can_draw;
@@ -278,7 +286,8 @@ if (root) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "end";
-    button.setAttribute("aria-label", side === "left" ? "Ligar à esquerda" : "Ligar à direita");
+    const labels = { left: "Ligar à esquerda", right: "Ligar à direita", center: "Abrir a mesa" };
+    button.setAttribute("aria-label", labels[side]);
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "icon");
     svg.setAttribute("aria-hidden", "true");
@@ -286,18 +295,19 @@ if (root) {
     use.setAttribute("href", `${root.dataset.icons}#${side === "left" ? "chevron-left" : "chevron-right"}`);
     svg.append(use);
     const label = document.createElement("span");
-    label.textContent = side === "left" ? "ESQ" : "DIR";
+    label.textContent = { left: "ESQ", right: "DIR", center: "MESA" }[side];
     button.append(svg, label);
     button.addEventListener("click", () => send("play", { tile_id: selected, side }));
     return button;
   }
 
-  function choose(tileId, sides) {
-    if (!sides) {
+  function choose(tileId, sides, data) {
+    if (!data.your_turn) return;
+    if (data.hints && !sides) {
       showToast("Essa peça não encaixa agora.");
       return;
     }
-    if (sides.length === 1) {
+    if (data.hints && sides.length === 1) {
       selected = null;
       send("play", { tile_id: tileId, side: sides[0] });
       return;
@@ -305,6 +315,18 @@ if (root) {
     selected = tileId;
     paint(snapshot);
   }
+
+  chain.addEventListener("dragover", (event) => event.preventDefault());
+  chain.addEventListener("drop", (event) => {
+    event.preventDefault();
+    const tileId = Number(event.dataTransfer.getData("text/plain"));
+    if (Number.isNaN(tileId) || !snapshot || !snapshot.your_turn) return;
+    const box = chain.getBoundingClientRect();
+    let side = event.clientX - box.left < box.width / 2 ? "left" : "right";
+    if (!snapshot.board.length) side = "center";
+    selected = null;
+    send("play", { tile_id: tileId, side });
+  });
 
   window.setInterval(() => {
     if (!busy) pull().catch(() => showToast("Sem conexão."));

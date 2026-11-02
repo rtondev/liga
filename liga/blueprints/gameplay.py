@@ -21,17 +21,11 @@ def new():
         return redirect(url_for("play.match", match_id=match_id))
     if request.method == "POST":
         mode = request.form.get("mode", "ai")
-        try:
-            hand_size = int(request.form.get("hand_size", "6"))
-        except ValueError:
-            hand_size = 6
-        if hand_size not in (6, 7, 8):
-            hand_size = 6
         difficulty = request.form.get("difficulty", "facil")
         if mode == "online":
-            match_id, _code = matches.create_room(user["id"], hand_size)
+            match_id, _code = matches.create_room(user["id"], difficulty)
             return redirect(url_for("play.lobby", match_id=match_id))
-        match_id = matches.create_ai(user["id"], hand_size, difficulty)
+        match_id = matches.create_ai(user["id"], difficulty)
         match = matches.get_match(match_id)
         if match["status"] == "finished":
             return redirect(url_for("play.result", match_id=match_id))
@@ -141,6 +135,8 @@ def state(match_id):
 def act(match_id):
     body = request.get_json(silent=True) or {}
     kind = body.get("action")
+    if kind not in ("play", "draw", "pass"):
+        return jsonify({"ok": False, "error": "Ação desconhecida."}), 400
     raw_tile = body.get("tile_id")
     try:
         tile_id = int(raw_tile) if raw_tile is not None else None
@@ -151,7 +147,7 @@ def act(match_id):
         current_user()["id"],
         kind,
         tile_id=tile_id,
-        side=body.get("side"),
+        side=body.get("side") if body.get("side") in ("left", "right", "center") else None,
     )
     if error:
         return jsonify({"ok": False, "error": error}), 409
@@ -181,8 +177,6 @@ def result(match_id):
         blurb = "Ebaaa! Você ligou as fórmulas direitinho."
     else:
         mood = "triste"
-        placed = row["p1_points"] if viewer == 1 else row["p2_points"]
-        # placed count is not stored separately; points are pips played.
         state = matches.load_state(row["state_json"])
         count = state["placed"][str(viewer)] if state else 0
         title = "Você perdeu!"

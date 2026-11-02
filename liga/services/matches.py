@@ -11,7 +11,24 @@ from datetime import datetime, timezone
 
 from liga.db import get_db, transaction, utc_now
 from liga.game.chemistry import FUNCTIONS
-from liga.game.engine import describe, draw, legal_moves, new_state, pass_turn, play, pips
+from liga.game.engine import (
+    HAND_SIZE,
+    can_draw,
+    can_pass,
+    describe,
+    draw,
+    function_of,
+    kind_of,
+    label,
+    legal_moves,
+    mate,
+    new_state,
+    pass_turn,
+    pieces,
+    play,
+)
+
+DIFFICULTIES = ("facil", "medio", "dificil")
 
 _guard = threading.Lock()
 _locks: dict[int, threading.Lock] = {}
@@ -41,10 +58,11 @@ def load_state(text: str | None) -> dict | None:
     return raw
 
 
-def create_ai(user_id: int, hand_size: int, difficulty: str) -> int:
-    if difficulty not in ("facil", "medio", "dificil"):
+def create_ai(user_id: int, difficulty: str) -> int:
+    if difficulty not in DIFFICULTIES:
         difficulty = "facil"
-    state = new_state(hand_size)
+    hand_size = HAND_SIZE
+    state = new_state()
     if state["turn"] == 2:
         from liga.game.ai import run_ai_turn
 
@@ -63,16 +81,18 @@ def create_ai(user_id: int, hand_size: int, difficulty: str) -> int:
     return match_id
 
 
-def create_room(user_id: int, hand_size: int) -> tuple[int, str]:
+def create_room(user_id: int, difficulty: str) -> tuple[int, str]:
+    if difficulty not in DIFFICULTIES:
+        difficulty = "facil"
     code = _unique_code()
     with transaction() as db:
         cursor = db.execute(
             """
             INSERT INTO matches (
-                mode, hand_size, status, room_code, player1_id, created_at
-            ) VALUES ('online', ?, 'waiting', ?, ?, ?)
+                mode, difficulty, hand_size, status, room_code, player1_id, created_at
+            ) VALUES ('online', ?, ?, 'waiting', ?, ?, ?)
             """,
-            (hand_size, code, user_id, utc_now()),
+            (difficulty, HAND_SIZE, code, user_id, utc_now()),
         )
         return cursor.lastrowid, code
 
@@ -116,7 +136,7 @@ def start_room(user_id: int, match_id: int):
             return match["id"], None
         if not match["player2_id"]:
             return None, "Ainda falta a outra pessoa."
-        state = new_state(match["hand_size"])
+        state = new_state()
         db.execute(
             """
             UPDATE matches
@@ -247,6 +267,8 @@ def action(match_id: int, user_id: int, kind: str, tile_id=None, side=None):
                 return None, "Essa partida não está em jogo."
             state = load_state(match["state_json"])
             if kind == "play":
+                if tile_id is None:
+                    return None, "Escolha uma peça."
                 ok, error = play(state, viewer, int(tile_id), side or "")
             elif kind == "draw":
                 ok, error = draw(state, viewer)
@@ -378,46 +400,52 @@ def _names_in(db, match) -> dict[int, str]:
     return names
 
 
-def _face(state: dict, tile_id: int, left: int | None = None, right: int | None = None) -> dict:
+def _half(value: int, hints: bool) -> dict:
+    info = FUNCTIONS[function_of(value)]
+    named = kind_of(value) == 0
+    half = {
+        "face": value,
+        "kind": "nome" if named else "funcao",
+        "text": info["tile"] if named else info["struct"],
+    }
+    if hints:
+        half["fn"] = function_of(value)
+        half["hint"] = info["struct"] if named else info["tile"]
+        half["mate"] = label(mate(value))
+    return half
+
+
+def _face(state: dict, tile_id: int, hints: bool, left: int | None = None, right: int | None = None) -> dict:
     tile = state["tiles"][tile_id]
     a = tile["a"] if left is None else left
     b = tile["b"] if right is None else right
-    return {
-        "id": tile_id,
-        "a": a,
-        "b": b,
-        "a_name": FUNCTIONS[a]["tile"],
-        "b_name": FUNCTIONS[b]["tile"],
-        "a_struct": FUNCTIONS[a]["struct"],
-        "b_struct": FUNCTIONS[b]["struct"],
-        "a_full": FUNCTIONS[a]["name"],
-        "b_full": FUNCTIONS[b]["name"],
-    }
+    return {"id": tile_id, "a": _half(a, hints), "b": _half(b, hints)}
 
 
 def _public(match, state: dict, viewer: int, names: dict[int, str], chat=None) -> dict:
-    your_moves = legal_moves(state, viewer) if state["status"] == "playing" else []
-    log = []
-    for item in state["log"]:
-        log.append(describe(item | {"seq": 0}, viewer, names))
+    hints = (match["difficulty"] or "facil") == "facil"
+    playing = state["status"] == "playing"
+    your_moves = legal_moves(state, viewer) if playing else []
+    log = [describe(item | {"seq": 0}, viewer, names) for item in state["log"]]
     return {
         "ok": True,
         "match_id": match["id"],
         "mode": match["mode"],
+        "difficulty": match["difficulty"] or "facil",
+        "hints": hints,
         "status": state["status"],
         "you": viewer,
         "turn": state["turn"],
-        "your_turn": state["status"] == "playing" and state["turn"] == viewer,
-        "your_hand": [_face(state, tile_id) for tile_id in state["hands"][str(viewer)]],
+        "your_turn": playing and state["turn"] == viewer,
+        "your_hand": [_face(state, tile_id, hints) for tile_id in state["hands"][str(viewer)]],
         "board": [
-            _face(state, item["id"], item["left"], item["right"]) for item in state["board"]
+            _face(state, item["id"], hints, item["left"], item["right"]) for item in state["board"]
         ],
         "boneyard": len(state["boneyard"]),
-        "pieces": {"1": len(state["hands"]["1"]), "2": len(state["hands"]["2"])},
+        "pieces": {"1": pieces(state, 1), "2": pieces(state, 2)},
         "scores": state["scores"],
-        "pips": {"1": pips(state, 1), "2": pips(state, 2)} if state["status"] == "finished" else None,
-        "legal": your_moves,
-        "opening_id": state["opening_id"] if not state["board"] else None,
+        "legal": your_moves if hints else [],
+        "must_carroca": bool(state.get("must_carroca")) and not state["board"],
         "names": {"1": names[1], "2": names[2]},
         "seq": state["seq"],
         "last_actor": state["last"]["actor"] if state["last"] else None,
@@ -428,14 +456,8 @@ def _public(match, state: dict, viewer: int, names: dict[int, str], chat=None) -
         "emojis": list(EMOJIS),
         "log": [line for line in log if line],
         "end": state["end"],
-        "can_draw": state["status"] == "playing"
-        and state["turn"] == viewer
-        and not your_moves
-        and bool(state["boneyard"]),
-        "can_pass": state["status"] == "playing"
-        and state["turn"] == viewer
-        and not your_moves
-        and not state["boneyard"],
+        "can_draw": can_draw(state, viewer),
+        "can_pass": can_pass(state, viewer),
     }
 
 

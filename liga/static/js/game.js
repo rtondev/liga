@@ -24,6 +24,21 @@ if (root) {
   let audioCtx = null;
   let reactsReady = false;
 
+  const timer = document.querySelector("#timer");
+  const leaveForm = document.querySelector("[data-leave]");
+  let deadline = null;
+  leaveForm.addEventListener("submit", (event) => {
+    const text = snapshot && snapshot.mode === "ai"
+      ? "Sair da partida? Ela termina como derrota."
+      : "Sair da partida? Você perde e o adversário vence.";
+    if (!window.confirm(text)) event.preventDefault();
+  });
+  window.setInterval(() => {
+    if (deadline == null) return;
+    const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    timer.textContent = `⏱ ${left}s`;
+    timer.classList.toggle("low", left <= 10);
+  }, 250);
   drawButton.addEventListener("click", () => send("draw"));
   passButton.addEventListener("click", () => send("pass"));
 
@@ -149,6 +164,7 @@ if (root) {
 
   function paint(data) {
     snapshot = data;
+    deadline = data.seconds_left != null ? Date.now() + data.seconds_left * 1000 : null;
     if (data.status === "finished") {
       window.location.href = data.result_url;
       return;

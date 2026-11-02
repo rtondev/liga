@@ -155,6 +155,21 @@ def act(match_id):
     return jsonify(payload)
 
 
+@bp.route("/partida/<int:match_id>/sair", methods=["POST"])
+@verified_required
+def leave(match_id):
+    row = matches.get_match(match_id)
+    error = matches.leave(match_id, current_user()["id"])
+    if error:
+        flash(error, "error")
+        return redirect(url_for("play.new"))
+    if row is not None and row["mode"] == "online" and row["status"] == "playing":
+        flash("Você saiu da partida. A vitória foi para o adversário.", "info")
+        return redirect(url_for("play.result", match_id=match_id))
+    flash("Você saiu da partida.", "info")
+    return redirect(url_for("main.home"))
+
+
 @bp.route("/partida/<int:match_id>/fim")
 @verified_required
 def result(match_id):
@@ -167,14 +182,25 @@ def result(match_id):
     viewer = matches.slot_of(row, user["id"])
     names = matches.player_names(row)
     winner = row["winner_slot"]
+    ended = matches.load_state(row["state_json"]) or {}
+    reason = (ended.get("end") or {}).get("reason")
     if winner == 0:
         mood = "triste"
         title = "Empate!"
         blurb = "Foi quase! Estude mais um pouco."
+    elif winner == viewer and reason in ("desistencia", "abandono"):
+        mood = "feliz"
+        title = "Você ganhou!"
+        loser = names[2 if viewer == 1 else 1]
+        blurb = f"{loser} saiu da partida" + (" (tempo esgotado)." if reason == "abandono" else ".")
     elif winner == viewer:
         mood = "feliz"
         title = "Você ganhou!"
         blurb = "Ebaaa! Você ligou as fórmulas direitinho."
+    elif reason in ("desistencia", "abandono"):
+        mood = "triste"
+        title = "Você saiu da partida"
+        blurb = "A vitória foi para o adversário." if reason == "desistencia" else "Seu tempo acabou várias vezes seguidas."
     else:
         mood = "triste"
         state = matches.load_state(row["state_json"])

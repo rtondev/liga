@@ -1011,3 +1011,8 @@ body[data-theme="dark"] .menu-leave .menu-ico { background: #3a2430; }
 
 .domino .hint { font-size: 8px; opacity: .7; display: block; }
 .domino .half.nome .fname { font-weight: 800; }
+
+.match-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.match-bar .timer { margin: 0; font-weight: 700; }
+.match-bar .timer.low { color: #c2410c; }
+.match-bar .leave { padding: 6px 10px; font-size: 12px; }

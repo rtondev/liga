@@ -9,12 +9,15 @@ São 56 peças (o dobro do dominó comum). Carroça = NOME/FUNÇÃO da mesma fun
 from __future__ import annotations
 
 import random
+import time
 
 from liga.game.chemistry import FUNCTIONS
 
 HAND_SIZE = 7
 POINTS_PER_HIT = 5
 NAME, FORMULA = 0, 1
+TURN_SECONDS = 60  # tempo de cada jogada
+MAX_TIMEOUTS = 3  # vezes seguidas sem jogar = abandono
 
 
 def face(function: int, kind: int) -> int:
@@ -78,6 +81,8 @@ def new_state(hand_size: int = HAND_SIZE, seed: int | None = None) -> dict:
         "last": None,
         "log": [],
         "end": None,
+        "turn_started": time.time(),
+        "timeouts": {"1": 0, "2": 0},
     }
 
 
@@ -162,6 +167,7 @@ def play(state: dict, player: int, tile_id, side: str) -> tuple[bool, str | None
     state["must_carroca"] = False
     state["scores"][slot] += POINTS_PER_HIT
     state["placed"][slot] += 1
+    state.setdefault("timeouts", {"1": 0, "2": 0})[slot] = 0
     _touch(state, player, verb, name, tile_id)
     if not state["hands"][slot]:
         _finish(state, player, "vazia")
@@ -179,6 +185,7 @@ def draw(state: dict, player: int) -> tuple[bool, str | None]:
         return False, "Você tem uma jogada. Ligue uma peça."
     state["hands"][str(player)].append(state["boneyard"].pop())
     state["drew"] = True
+    state.setdefault("timeouts", {"1": 0, "2": 0})[str(player)] = 0
     _touch(state, player, "draw", "")
     return True, None
 
@@ -196,6 +203,54 @@ def pass_turn(state: dict, player: int) -> tuple[bool, str | None]:
     else:
         _next(state, player)
     return True, None
+
+
+def forfeit(state: dict, player: int) -> tuple[bool, str | None]:
+    """Quem sai da partida perde; o adversário vence."""
+    if state["status"] != "playing":
+        return False, "Essa partida já terminou."
+    _touch(state, player, "leave", "")
+    _finish(state, 2 if player == 1 else 1, "desistencia")
+    return True, None
+
+
+def seconds_left(state: dict, now: float | None = None) -> int:
+    now = time.time() if now is None else now
+    started = state.get("turn_started", now)
+    return max(0, int(round(started + TURN_SECONDS - now)))
+
+
+def tick(state: dict, now: float | None = None) -> bool:
+    """Aplica o tempo esgotado: puxa do cemitério se der, senão passa.
+    Quem estoura o tempo MAX_TIMEOUTS vezes seguidas abandona e perde."""
+    now = time.time() if now is None else now
+    changed = False
+    guard = 0
+    while state["status"] == "playing" and guard < 10:
+        started = state.setdefault("turn_started", now)
+        deadline = started + TURN_SECONDS
+        if now < deadline:
+            break
+        guard += 1
+        changed = True
+        player = state["turn"]
+        slot = str(player)
+        timeouts = state.setdefault("timeouts", {"1": 0, "2": 0})
+        timeouts[slot] += 1
+        if timeouts[slot] >= MAX_TIMEOUTS:
+            _touch(state, player, "timeout", "")
+            _finish(state, 2 if player == 1 else 1, "abandono")
+            break
+        if state["boneyard"] and not state["drew"]:
+            state["hands"][slot].append(state["boneyard"].pop())
+            state["drew"] = True
+        _touch(state, player, "timeout", "")
+        if blocked(state):
+            _finish(state, 0, "travada")
+            break
+        _next(state, player)
+        state["turn_started"] = deadline
+    return changed
 
 
 def blocked(state: dict) -> bool:
@@ -234,12 +289,17 @@ def describe(last: dict | None, viewer: int, names: dict[int, str]) -> str:
         return f"{who} puxou uma peça do cemitério."
     if verb == "pass":
         return f"{who} passou a vez."
+    if verb == "timeout":
+        return f"O tempo de {who if who != 'Você' else 'você'} acabou."
+    if verb == "leave":
+        return f"{who} saiu da partida."
     return ""
 
 
 def _next(state: dict, player: int) -> None:
     state["turn"] = 2 if player == 1 else 1
     state["drew"] = False
+    state["turn_started"] = time.time()
 
 
 def _touch(state: dict, actor: int, verb: str, name: str, tile_id: int | None = None) -> None:

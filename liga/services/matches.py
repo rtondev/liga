@@ -7,7 +7,7 @@ import secrets
 import threading
 from copy import deepcopy
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from liga.db import get_db, transaction, utc_now
 from liga.game.chemistry import FUNCTIONS
@@ -26,7 +26,13 @@ from liga.game.engine import (
     pass_turn,
     pieces,
     play,
+    seconds_left,
+    tick,
+    forfeit,
+    TURN_SECONDS,
 )
+
+ROOM_TTL_MINUTES = 30
 
 DIFFICULTIES = ("facil", "medio", "dificil")
 
@@ -173,6 +179,7 @@ def history(user_id: int):
 
 
 def open_matches(user_id: int):
+    expire_stale(user_id)
     return get_db().execute(
         """
         SELECT * FROM matches
@@ -182,6 +189,68 @@ def open_matches(user_id: int):
         """,
         (user_id, user_id),
     ).fetchall()
+
+
+def expire_stale(user_id: int) -> None:
+    """Salas esperando há muito tempo somem; partidas paradas aplicam o tempo."""
+    db = get_db()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=ROOM_TTL_MINUTES)).replace(microsecond=0).isoformat()
+    with transaction() as tx:
+        tx.execute(
+            "UPDATE matches SET status = 'cancelled' WHERE status = 'waiting' AND created_at < ? AND (player1_id = ? OR player2_id = ?)",
+            (cutoff, user_id, user_id),
+        )
+    rows = db.execute(
+        "SELECT id FROM matches WHERE status = 'playing' AND (player1_id = ? OR player2_id = ?)",
+        (user_id, user_id),
+    ).fetchall()
+    for row in rows:
+        with _mutex(row["id"]):
+            with transaction() as tx:
+                match = tx.execute("SELECT * FROM matches WHERE id = ?", (row["id"],)).fetchone()
+                state = load_state(match["state_json"])
+                if state and _advance(match, state):
+                    _save(tx, match["id"], state)
+
+
+def _advance(match, state: dict) -> bool:
+    changed = False
+    for _ in range(10):
+        if state["status"] != "playing":
+            break
+        if match["mode"] == "ai" and state["turn"] == 2:
+            from liga.game.ai import run_ai_turn
+
+            run_ai_turn(state, match["difficulty"] or "facil", 2)
+            changed = True
+            continue
+        if not tick(state):
+            break
+        changed = True
+    return changed
+
+
+def leave(match_id: int, user_id: int):
+    with _mutex(match_id):
+        with transaction() as db:
+            match = db.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+            if match is None:
+                return "Partida não encontrada."
+            viewer = slot_of(match, user_id)
+            if viewer is None:
+                return "Essa mesa não é sua."
+            if match["status"] == "waiting":
+                if viewer == 1:
+                    db.execute("UPDATE matches SET status = 'cancelled' WHERE id = ?", (match_id,))
+                else:
+                    db.execute("UPDATE matches SET player2_id = NULL WHERE id = ?", (match_id,))
+                return None
+            if match["status"] != "playing":
+                return None
+            state = load_state(match["state_json"])
+            forfeit(state, viewer)
+            _save(db, match_id, state)
+            return None
 
 
 def player_names(match) -> dict[int, str]:
@@ -209,10 +278,7 @@ def view_for(match_id: int, user_id: int) -> tuple[dict | None, str | None]:
             if match["status"] == "waiting":
                 return {"status": "waiting", "match_id": match_id, "room_code": match["room_code"]}, None
             state = load_state(match["state_json"])
-            if match["mode"] == "ai" and state["status"] == "playing" and state["turn"] == 2:
-                from liga.game.ai import run_ai_turn
-
-                run_ai_turn(state, match["difficulty"] or "facil", 2)
+            if _advance(match, state):
                 _save(db, match_id, state)
             names = _names_in(db, match)
             return _public(match, state, viewer, names, _recent_chat(db, match_id, viewer, names)), None
@@ -266,6 +332,14 @@ def action(match_id: int, user_id: int, kind: str, tile_id=None, side=None):
             if match["status"] != "playing":
                 return None, "Essa partida não está em jogo."
             state = load_state(match["state_json"])
+            if _advance(match, state):
+                _save(db, match_id, state)
+                if state["status"] != "playing" or state["turn"] != viewer:
+                    names = _names_in(db, match)
+                    payload = _public(match, state, viewer, names, _recent_chat(db, match_id, viewer, names))
+                    payload["ok"] = False
+                    payload["error"] = "Seu tempo acabou."
+                    return payload, None
             if kind == "play":
                 if tile_id is None:
                     return None, "Escolha uma peça."
@@ -458,6 +532,8 @@ def _public(match, state: dict, viewer: int, names: dict[int, str], chat=None) -
         "end": state["end"],
         "can_draw": can_draw(state, viewer),
         "can_pass": can_pass(state, viewer),
+        "seconds_left": seconds_left(state) if playing else None,
+        "turn_seconds": TURN_SECONDS,
     }
 
 

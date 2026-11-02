@@ -3,7 +3,13 @@ if (root) {
   const matchId = root.dataset.match;
   const csrf = document.querySelector('meta[name="csrf"]').content;
   const soundOn = root.dataset.sound === "1";
-  const players = document.querySelector("#players");
+  const slots = { "1": document.querySelector("#p1"), "2": document.querySelector("#p2") };
+  const chatToggle = document.querySelector("#chat-toggle");
+  const chatDrawer = document.querySelector("#chat-drawer");
+  chatToggle.addEventListener("click", () => {
+    chatDrawer.hidden = !chatDrawer.hidden;
+    chatToggle.setAttribute("aria-expanded", String(!chatDrawer.hidden));
+  });
   const chain = document.querySelector("#chain");
   const hand = document.querySelector("#hand");
   const bone = document.querySelector("#bone");
@@ -209,17 +215,17 @@ if (root) {
       if (selected != null) chain.append(endButton("center"));
     } else {
       if (chosen && chosen.includes("left")) chain.append(endButton("left"));
+      let landedNode = null;
       data.board.forEach((tile) => {
         const button = piece(tile, true);
         if (tile.id === landedId) {
           button.classList.add("landed");
-          window.requestAnimationFrame(() => {
-            button.scrollIntoView({ inline: "center", block: "nearest" });
-          });
+          landedNode = button;
         }
         chain.append(button);
       });
       if (chosen && chosen.includes("right")) chain.append(endButton("right"));
+      if (landedNode) window.requestAnimationFrame(() => landedNode.scrollIntoView({ block: "nearest", inline: "nearest" }));
     }
     hand.innerHTML = "";
     data.your_hand.forEach((tile) => {
@@ -279,8 +285,8 @@ if (root) {
   }
 
   function drawPlayers(data) {
-    players.innerHTML = "";
     ["1", "2"].forEach((slot) => {
+      slots[slot].innerHTML = "";
       const card = document.createElement("article");
       card.className = `pcard p${slot}${Number(slot) === data.turn ? " active" : ""}`;
       const mark = document.createElement("div");
@@ -291,10 +297,10 @@ if (root) {
       const name = document.createElement("strong");
       name.textContent = data.names[slot];
       const meta = document.createElement("span");
-      meta.textContent = `${data.scores[slot]} pontos · ${data.pieces[slot]} peças`;
+      meta.textContent = `${data.scores[slot]} pts · ${data.pieces[slot]} pç`;
       who.append(name, meta);
       card.append(mark, who);
-      players.append(card);
+      slots[slot].append(card);
     });
   }
 

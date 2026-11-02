@@ -29,10 +29,16 @@ def create_app() -> Flask:
     def csrf_input():
         return Markup(f'<input type="hidden" name="csrf" value="{ensure_csrf()}">')
 
+    def art_url(name: str, fallback: str = "img/logo.png") -> str:
+        """Arte nova do axolotl se o arquivo existir; senão a antiga (fácil de reverter)."""
+        path = os.path.join(app.static_folder, "img", name)
+        return url_for("static", filename=f"img/{name}" if os.path.exists(path) else fallback)
+
     @app.context_processor
     def inject():
         user = current_user()
         return {
+            "art": art_url,
             "csrf_token": ensure_csrf(),
             "current_user": user,
             "theme": (user or {}).get("theme") or "light",

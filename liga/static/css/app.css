@@ -604,8 +604,10 @@ body[data-theme="dark"] .scoreboard { background: #24383c; }
 }
 .pill-score.you-win { outline: 2px solid var(--purple); }
 .pill-score b { display: block; font-size: 32px; line-height: 1; }
-.pill-score.purple b, .pill-score.purple { color: var(--purple); border: 1.5px solid var(--purple); }
-.pill-score.teal b, .pill-score.teal { color: var(--teal); border: 1.5px solid var(--teal); }
+.pill-score.purple { color: var(--purple); border: 1.5px solid var(--purple); }
+.pill-score.teal { color: var(--teal); border: 1.5px solid var(--teal); }
+.pill-score.purple b { color: var(--purple); }
+.pill-score.teal b { color: var(--teal); }
 .pill-score small { display: block; color: var(--muted); font-size: 11px; }
 
 .actions-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -855,8 +857,9 @@ body[data-theme="dark"] .scoreboard { background: #24383c; }
   box-shadow: 0 0 0 3px var(--purple);
 }
 @keyframes land {
-  0% { transform: scale(1.2); }
-  100% { transform: scale(1); }
+  0% { opacity: 0; transform: translateY(-18px) scale(.92); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
 }
 .domino.playable { box-shadow: 0 0 0 2px var(--teal); }
 .domino.selected { box-shadow: 0 0 0 2px var(--purple); }
@@ -1103,3 +1106,17 @@ body[data-theme="dark"] .menu-leave .menu-ico { background: #3a2430; }
 .hand-actions .btn.plain:not(:disabled) { background: var(--white); color: var(--purple-d); border: 2px solid var(--purple-d); }
 .hand-actions .btn:disabled { opacity: 1; background: #e5e7eb; color: #9ca3af; border: 1px dashed #c4c8cf; cursor: not-allowed; }
 .hand-actions .btn:disabled .icon { opacity: .6; }
+
+/* v16: fim de jogo, chat e animação da peça */
+.play-top { position: relative; z-index: 4; }
+.play-mid { position: relative; z-index: 1; overflow: hidden; }
+.pill-score { width: 120px; min-height: 0; padding: 10px 8px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; }
+.pill-score.you-win { outline: 0; box-shadow: 0 0 0 3px rgba(124, 77, 255, .25); }
+.pill-score b { font-size: 34px; border: 0; padding: 0; margin: 0; }
+.pill-score small { line-height: 1.25; }
+.versus { align-items: stretch; }
+.versus > .muted { align-self: center; }
+.result-page { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+.result-page .scoreboard .tiny { margin-bottom: 0; }
+.mascot-block img.art { width: 200px; height: auto; max-height: 220px; object-fit: contain; }
+.chat-drawer .reacts { flex-wrap: wrap; overflow: visible; justify-content: center; }

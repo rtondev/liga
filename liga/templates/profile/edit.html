@@ -5,7 +5,7 @@
 {% block content %}
 <header class="banner" style="background: {{ tones.get(user.banner, '#01a29a') }}">
   <a class="icon-btn left" href="{{ url_for('profile.view') }}" aria-label="Cancelar">{{ icon('chevron-left') }}</a>
-  <p class="tiny" style="letter-spacing:.08em">EDITAR PROFILE</p>
+  <p class="tiny" style="letter-spacing:.08em">EDITAR PERFIL</p>
   <img class="avatar lg" src="{{ url_for('profile.avatar_image', user_id=user.id) }}" alt="">
   <h1>{{ user.display_name }}</h1>
   <p>@{{ user.username }}</p>

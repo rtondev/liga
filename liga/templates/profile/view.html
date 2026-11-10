@@ -7,7 +7,7 @@
 <header class="banner" style="background: {{ tones.get(user.banner, '#01a29a') }}">
   <a class="icon-btn left" href="{{ url_for('main.home') }}" aria-label="Voltar">{{ icon('chevron-left') }}</a>
   <a class="icon-btn right" href="{{ url_for('profile.edit') }}" aria-label="Editar perfil">{{ icon('pencil') }}</a>
-  <p class="eyebrow">PROFILE</p>
+  <p class="eyebrow">PERFIL</p>
   <div class="avatar-wrap">
     <img class="avatar lg" src="{{ url_for('profile.avatar_image', user_id=user.id) }}" alt="">
   </div>

@@ -162,10 +162,85 @@ if (root) {
   function piece(tile, flat) {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = flat ? "domino flat" : "domino";
+    button.className = flat ? "domino flat on-table" : "domino";
     if (tile.a.mate) button.title = `Liga com ${tile.a.mate} ou ${tile.b.mate}`;
     button.append(half(tile.a), half(tile.b));
     return button;
+  }
+
+  let view = null;
+
+  function boardBox() {
+    const style = getComputedStyle(chain);
+    const tileW = parseFloat(style.getPropertyValue("--tile-w")) || 150;
+    const tileH = parseFloat(style.getPropertyValue("--tile-h")) || 96;
+    const rawGap = parseFloat(style.getPropertyValue("--tile-gap"));
+    const gap = Number.isFinite(rawGap) ? rawGap : 12;
+    const padL = parseFloat(style.paddingLeft) || 0;
+    const padR = parseFloat(style.paddingRight) || 0;
+    const maxWidth = Math.max(tileW, chain.clientWidth - padL - padR);
+    return { tileW, tileH, gap, maxWidth };
+  }
+
+  function drawSpine(track, spots, tileW, tileH, width, height) {
+    let svg = track.querySelector(".spine");
+    if (spots.length < 2) {
+      if (svg) svg.remove();
+      return;
+    }
+    if (!svg) {
+      svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "spine");
+      svg.setAttribute("aria-hidden", "true");
+      track.prepend(svg);
+    }
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.setAttribute("width", String(width));
+    svg.setAttribute("height", String(height));
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", spots.map((spot, index) => {
+      const x = spot.x + tileW / 2;
+      const y = spot.y + tileH / 2;
+      return `${index ? "L" : "M"} ${x} ${y}`;
+    }).join(" "));
+    svg.append(path);
+  }
+
+  function layoutNow() {
+    if (!view) return;
+    const { tiles, leftCap, rightCap } = view;
+    const track = chain.querySelector(".snake");
+    if (!track || !window.LigaBoard) return;
+    const { tileW, tileH, gap, maxWidth } = boardBox();
+    const lead = leftCap ? 1 : 0;
+    const total = tiles.length + lead + (rightCap ? 1 : 0);
+    const layout = window.LigaBoard.layoutChain(total, maxWidth, tileW, tileH, gap);
+    track.style.width = `${layout.width}px`;
+    track.style.height = `${layout.height}px`;
+    const apply = (node, spot) => {
+      if (!node || !spot) return;
+      node.style.left = `${spot.x}px`;
+      node.style.top = `${spot.y}px`;
+    };
+    if (leftCap) apply(leftCap, layout.tiles[0]);
+    tiles.forEach((node, index) => apply(node, layout.tiles[index + lead]));
+    if (rightCap) apply(rightCap, layout.tiles[layout.tiles.length - 1]);
+    drawSpine(track, layout.tiles.slice(lead, lead + tiles.length), tileW, tileH, layout.width, layout.height);
+  }
+
+  function settleScroll(mode, landedNode, keepTop) {
+    if (mode === "keep" && keepTop != null) chain.scrollTop = keepTop;
+    window.requestAnimationFrame(() => {
+      if (mode === "landed" && landedNode) {
+        landedNode.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else if (mode === "end") {
+        chain.scrollTop = chain.scrollHeight;
+      } else if (mode === "keep" && keepTop != null) {
+        chain.scrollTop = keepTop;
+      }
+      chain.dataset.ready = "1";
+    });
   }
 
   function paint(data) {
@@ -202,11 +277,12 @@ if (root) {
     }
     turn.classList.toggle("them", !data.your_turn);
     drawPlayers(data);
-    const keepScroll = chain.dataset.ready ? chain.scrollLeft : null;
+    const keepTop = chain.dataset.ready ? chain.scrollTop : null;
     chain.innerHTML = "";
     const legal = new Map(data.legal.map((item) => [item.tile_id, item.sides]));
     const chosen = selected != null ? (data.hints ? legal.get(selected) : ["left", "right"]) : null;
     if (!data.board.length) {
+      view = null;
       const empty = document.createElement("p");
       empty.className = "empty-board";
       empty.textContent = data.your_turn
@@ -215,27 +291,26 @@ if (root) {
       chain.append(empty);
       if (selected != null) chain.append(endButton("center"));
     } else {
-      if (chosen && chosen.includes("left")) chain.append(endButton("left"));
+      const track = document.createElement("div");
+      track.className = "snake";
+      chain.append(track);
+      const leftCap = chosen && chosen.includes("left") ? endButton("left") : null;
+      const rightCap = chosen && chosen.includes("right") ? endButton("right") : null;
+      if (leftCap) track.append(leftCap);
       let landedNode = null;
-      data.board.forEach((tile) => {
+      const tiles = data.board.map((tile) => {
         const button = piece(tile, true);
         if (tile.id === landedId) {
           button.classList.add("landed");
           landedNode = button;
         }
-        chain.append(button);
+        track.append(button);
+        return button;
       });
-      if (chosen && chosen.includes("right")) chain.append(endButton("right"));
-      window.requestAnimationFrame(() => {
-        if (landedNode) {
-          chain.scrollLeft = landedNode.offsetLeft - (chain.clientWidth - landedNode.offsetWidth) / 2;
-        } else if (keepScroll == null) {
-          chain.scrollLeft = chain.scrollWidth;
-        } else {
-          chain.scrollLeft = keepScroll;
-        }
-        chain.dataset.ready = "1";
-      });
+      if (rightCap) track.append(rightCap);
+      view = { tiles, leftCap, rightCap };
+      layoutNow();
+      settleScroll(landedNode ? "landed" : keepTop == null ? "end" : "keep", landedNode, keepTop);
     }
     hand.innerHTML = "";
     data.your_hand.forEach((tile) => {
@@ -348,17 +423,39 @@ if (root) {
     paint(snapshot);
   }
 
+  function nearestEnd(event) {
+    if (!snapshot || !snapshot.board.length) return "center";
+    const nodes = chain.querySelectorAll(".domino.on-table");
+    const start = nodes[0];
+    const finish = nodes[nodes.length - 1];
+    if (!start || !finish) return "right";
+    if (start === finish) {
+      const rect = start.getBoundingClientRect();
+      return event.clientX < rect.left + rect.width / 2 ? "left" : "right";
+    }
+    const dist = (node) => {
+      const rect = node.getBoundingClientRect();
+      const dx = event.clientX - (rect.left + rect.width / 2);
+      const dy = event.clientY - (rect.top + rect.height / 2);
+      return dx * dx + dy * dy;
+    };
+    return dist(start) <= dist(finish) ? "left" : "right";
+  }
+
   chain.addEventListener("dragover", (event) => event.preventDefault());
   chain.addEventListener("drop", (event) => {
     event.preventDefault();
     const tileId = Number(event.dataTransfer.getData("text/plain"));
     if (Number.isNaN(tileId) || !snapshot || !snapshot.your_turn) return;
-    const box = chain.getBoundingClientRect();
-    let side = event.clientX - box.left < box.width / 2 ? "left" : "right";
-    if (!snapshot.board.length) side = "center";
     selected = null;
-    send("play", { tile_id: tileId, side });
+    send("play", { tile_id: tileId, side: nearestEnd(event) });
   });
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => layoutNow()).observe(chain);
+  } else {
+    window.addEventListener("resize", () => layoutNow());
+  }
 
   window.setInterval(() => {
     if (!busy) pull().catch(() => showToast("Sem conexão."));
